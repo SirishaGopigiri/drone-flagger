@@ -1,0 +1,51 @@
+apiVersion: flagger.app/v1beta1
+kind: Canary
+metadata:
+  name: golangapp-canary
+spec:
+  # deployment reference
+  targetRef:
+    apiVersion: apps/v1
+    kind: Deployment
+    name: golangapp
+  service:
+    # service port number
+    port: 5000
+    gateways:
+    - golangapp-gateway
+    hosts:
+    - "*"
+  analysis:
+    # schedule interval (default 60s)
+    interval: 1m
+    # max number of failed metric checks before rollback
+    threshold: 5
+    # max traffic percentage routed to canary percentage (0-100)
+    maxWeight: 50
+    # canary increment step percentage (0-100)
+    stepWeight: 10
+    metrics:
+    - name: request-success-rate
+      # minimum req success rate (non 5xx responses)
+      thresholdRange:
+        min: 99
+      interval: 1m
+    - name: request-duration
+      # maximum req duration P99
+      thresholdRange:
+        max: 500
+      interval: 30s
+    # testing (optional)
+    webhooks:
+      - name: acceptance-test
+        type: pre-rollout
+        url: http://flagger-loadtester.test/
+        timeout: 30s
+        metadata:
+          type: bash
+          cmd: "curl -sd 'test' http://golangapp-canary.test:5000/"
+      - name: load-test
+        url: http://flagger-loadtester.test/
+        timeout: 5s
+        metadata:
+          cmd: "hey -z 1m -q 10 -c 2 http://golangapp-canary.test:5000/"
